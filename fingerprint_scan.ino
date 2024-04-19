@@ -9,27 +9,30 @@
 #include <SPI.h>
 #include <SD.h>
 
-File myFile;
-const int chipSelect = 53;
+// SD card adapter setup
+File myFile; // declaration of file for logging to SD card
+const int chipSelect = 53; // CS pin for SD card
 
+// RTC setup
 ThreeWire myWire(6,7,5); // IO, SCLK, CE
 RtcDS1302<ThreeWire> Rtc(myWire);
 
+// FingerPrint Sensor setup
 SoftwareSerial mySerial(10, 11);  // RX, TX
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
-uint8_t id = 2;
-Servo myservo;
-// Button pin definitions
+uint8_t id = 2; // Starting ID for enrolling fingerprints
+Servo myservo; // servo declaration
+// Button pin declarations
 const int addButtonPin = 2;  // The pin number connected to the add button
 const int readButtonPin = 3;  // The pin number connected to the read button
 
 // LCD I2C address setup for a 16 chars and 2 line display
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-// Data wire is plugged into pin 2 on the Arduino
+// temperature sensor connection
 #define ONE_WIRE_BUS 13
 
-// Define the LED pins
+// LED pins connection 
 #define LED_ABOVE_28 8 // LED that turns on when temp is above 28°C
 #define LED_BELOW_26 9 // LED that turns on when temp is below 26°C
 // Setup a oneWire instance to communicate with any OneWire devices
@@ -41,10 +44,10 @@ DallasTemperature sensors(&oneWire);
 void setup() {
   Serial.begin(9600);
   
-  while (!Serial);
+  while (!Serial); // Wait for serial port to connect
   Serial.println("\n\nFingerprint sensor setup");
 
-
+  // SD card initialization
   pinMode(SS, OUTPUT);
 
   if (!SD.begin(chipSelect)) {
@@ -52,21 +55,23 @@ void setup() {
     return;
   }
 
-  // Open and immediately close the file in setup if needed for an initial check or setup
+  // Open the file
   myFile = SD.open("logss.txt", FILE_WRITE);
   if (myFile) {
     Serial.println("File opened successfully in setup.");
-//    myFile.close(); // Close the file immediately if just checking for existence or initializing file
+//    myFile.close();
   } else {
     Serial.println("Failed to open file in setup.");
   }
-  
-  pinMode(addButtonPin, INPUT);  // Set the button pins as input
+
+  // Set the button pins as input
+  pinMode(addButtonPin, INPUT);  
   pinMode(readButtonPin, INPUT);
 
+  // Start temperature sensor and LCD initialization
   sensors.begin();
-  lcd.init();  // Initialize the LCD
-  lcd.backlight();  // Turn on the backlight
+  lcd.init();
+  lcd.backlight();
 
   
 
@@ -78,6 +83,7 @@ void setup() {
 
   delay(500);  // Short delay might help stabilize input readings
 
+  // Initialize fingerprint sensor
   finger.begin(57600);
   if (finger.verifyPassword()) {
     Serial.println("Found fingerprint sensor!");
@@ -87,13 +93,15 @@ void setup() {
     lcd.print("Sensor error");
     while (1) { delay(1); }
   }
+  
+  // servo attach and initial position setup
   myservo.attach(4);
   myservo.write(0);
 
 
   Serial.println("Temperature Sensor Ready");
 
-
+  // RTC initialization
   Rtc.Begin();
 
   RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
@@ -141,7 +149,7 @@ bool lastButtonStateAdd = HIGH;  // the previous reading from the input pin
 bool lastButtonStateRead = HIGH;  // the previous reading from the input pin
 
 void loop() {
-// temp
+// Temperature measurement and display logic
   sensors.requestTemperatures(); 
   float tempC = sensors.getTempCByIndex(0);
   
@@ -184,7 +192,7 @@ void loop() {
 
 
 
-//rtc
+//RTC date and time update
     RtcDateTime now = Rtc.GetDateTime();
 
     printDateTime(now);
@@ -198,7 +206,7 @@ void loop() {
 
 
 
-//fingerprint
+// Fingerprint Sensor logic
   
   
   int currentButtonStateAdd = digitalRead(addButtonPin);
@@ -248,7 +256,7 @@ void loop() {
   lastButtonStateRead = currentButtonStateRead;
 }
 
-//rtc
+// print DateTime function
 void printDateTime(const RtcDateTime& dt) {
     char datestring[20];
 
@@ -267,14 +275,13 @@ void printDateTime(const RtcDateTime& dt) {
     Serial.println(datestring); // Print the formatted date and time
 }
 
-//fingerprint
+// fingerprint enrollment start
 void enrollFingerprint() {
-  // Place your code for adding a new fingerprint here
   Serial.println("Enrolling new fingerprint...");
-  
   getFingerprintEnroll();
 }
 
+// fingerprint read start
 void readFingerprint() {
   // Place your code for reading a fingerprint here
   Serial.println("Reading fingerprint...");
@@ -282,8 +289,8 @@ void readFingerprint() {
   getFingerprintIDez();
 }
 
-// Include your existing functions like getFingerprintEnroll, getFingerprintIDez, etc.
 
+// Check if fingerprint already exists
 uint8_t getFingerprintID() {
   uint8_t p = finger.getImage();
   switch (p) {
@@ -329,7 +336,7 @@ uint8_t getFingerprintID() {
   }
   
   // OK converted!
-  p = finger.fingerFastSearch();
+  p = finger.fingerFastSearch(); // Check if fingerprint already in system
   if (p == FINGERPRINT_OK) {
 
     Serial.println("Found a print match!");
@@ -344,7 +351,7 @@ uint8_t getFingerprintID() {
     return p;
   }   
   
-  // found a match!
+  // found a match
   Serial.print("Found ID #"); Serial.print(finger.fingerID); 
   
   Serial.print(" with confidence of "); Serial.println(finger.confidence); 
@@ -372,36 +379,36 @@ int getFingerprintIDez() {
     return -1;
   }  
   
-  // found a match!
+  // found a match
   Serial.print("Found ID #"); Serial.print(finger.fingerID); 
   Serial.print(" with confidence of "); Serial.println(finger.confidence);
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Opened");
-  logEvent("Door opened", finger.fingerID);
+  logEvent("Door opened", finger.fingerID); // Log door opening to SD
 
-  myservo.write(90);
-  delay(4000);
-  myservo.write(0);
+  myservo.write(90); // open servo lock
+  delay(4000); // wait for 4 seconds
+  myservo.write(0); // close servo lock
 //  delay(1000);
   return finger.fingerID; 
 }
 
 
 
-//  ENROLL
+// enroll new fingerprint into system
 uint8_t getFingerprintEnroll() {
 
   int p = -1;
   Serial.print("Waiting for valid finger to enroll as #"); Serial.println(id);
   while (p != FINGERPRINT_OK) {
-    p = finger.getImage();
+    p = finger.getImage(); // get finger image
     switch (p) {
     case FINGERPRINT_OK:
       Serial.println("Image taken");
       lcd.clear();
       lcd.setCursor(0, 0);
-      lcd.print("Image taken");
+      lcd.print("Image taken"); // Notify using LCD that image was taken
       break;
     case FINGERPRINT_NOFINGER:
       Serial.println(".");
@@ -508,7 +515,7 @@ uint8_t getFingerprintEnroll() {
   p = finger.createModel();
   if (p == FINGERPRINT_OK) {
     Serial.println("Prints matched!");
-    logEvent("Finderprint added", finger.fingerID);
+    logEvent("Finderprint added", finger.fingerID); // Log fingerprint addition to SD
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
     return p;
@@ -526,7 +533,7 @@ uint8_t getFingerprintEnroll() {
   }   
   
   Serial.print("ID "); Serial.println(id);
-  p = finger.storeModel(id);
+  p = finger.storeModel(id); // Store fingerprint
   if (p == FINGERPRINT_OK) {
     Serial.println("Stored!");
     lcd.clear();
@@ -550,31 +557,31 @@ uint8_t getFingerprintEnroll() {
 
 
 void logEvent(const char* event, int id) {
-  RtcDateTime now = Rtc.GetDateTime();  // Get the current time and date
-//  myFile = SD.open("test.txt", FILE_WRITE);  // Open the file for appending
+  RtcDateTime now = Rtc.GetDateTime();  // Get current DateTime
+//  myFile = SD.open("test.txt", FILE_WRITE);
 
   if (myFile) {
     Serial.println("IN MY FILE");
 
-    char datestring[32];
+    char datestring[32]; // datetime in readable format
     snprintf(datestring, sizeof(datestring), "%02u/%02u/%04u %02u:%02u",
              now.Month(), now.Day(), now.Year(), now.Hour(), now.Minute());
 
-    // First, print the ID to the file
+    //  ID to the SD
     myFile.print("ID: ");
     myFile.print(id);
-    myFile.print(", ");  // Separator between ID and event description
-
-    // Second, print the event description
+    myFile.print(", ");
+    
+    // event description SD
     myFile.print(event);
-    myFile.print(", ");  // Separator between event description and timestamp
+    myFile.print(", ");
 
-    // Finally, print the formatted date and time
+    // formatted datetime to SD
     myFile.println(datestring);
     Serial.println("WE ADDED INTO LOG FILE");
     myFile.flush();
 //    myFile.close();
-    delay(1000);// Close the file after writing to ensure data is saved
+    delay(1000);
     Serial.println("Event logged and file closed.");\
     
   } else {
@@ -582,9 +589,10 @@ void logEvent(const char* event, int id) {
   }
 }
 
+// Close SD File
 void closeFile() {
   if (myFile) {
-    myFile.close(); // Close the file to ensure all data is written and resources are released
+    myFile.close();
     Serial.println("File closed successfully.");
   }
 }
